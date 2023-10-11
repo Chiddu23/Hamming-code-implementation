@@ -1,0 +1,218 @@
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.net.Socket;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Random;
+
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+
+public class Client {
+
+	private BufferedReader in;
+    private PrintWriter out;
+    private JFrame frame = new JFrame("Hamming Code Simulator");
+    private JTextField dataField = new JTextField(30);
+    private JTextArea messageArea = new JTextArea(10, 50);
+    private JLabel labelInfo = new JLabel("Enter a bit stream of any length");
+    JPanel panel1 = new JPanel();
+    JButton sendInfo = new JButton("Send Information");  
+    
+    JPanel panel2 = new JPanel();
+    JPanel panelSpace = new JPanel();
+
+    public Client() {
+    	
+    	
+        messageArea.setEditable(false);
+        
+        panelSpace.add(Box.createVerticalStrut(100));
+      
+        panel1.setBorder(BorderFactory.createTitledBorder("CLIENT"));
+        panel2.setBorder(BorderFactory.createTitledBorder("SERVER"));
+        
+        BoxLayout layout1 = new BoxLayout(panel1, BoxLayout.Y_AXIS);
+		BoxLayout layout2 = new BoxLayout(panel2, BoxLayout.Y_AXIS);
+		
+		panel1.setLayout(layout1);
+		panel2.setLayout(layout2);
+		
+		dataField.setAlignmentX(Component.CENTER_ALIGNMENT);
+		sendInfo.setAlignmentX(Component.LEFT_ALIGNMENT);
+		labelInfo.setAlignmentX(Component.LEFT_ALIGNMENT);
+		new JScrollPane(messageArea).setAlignmentX(Component.CENTER_ALIGNMENT);
+		panel1.add(labelInfo);
+		panel1.add(dataField);
+		panel1.add(sendInfo);
+		panel2.add(new JScrollPane(messageArea));
+
+		frame.setLayout(new FlowLayout());
+		
+		frame.getContentPane().add(panel1);
+		frame.getContentPane().add(panelSpace);
+		frame.getContentPane().add(panel2);
+
+        ActionListener listener = new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+            	String userInput = dataField.getText();
+            	
+            	int n = userInput.length();
+            	
+            	int a[] = new int[n];
+            	
+            	String arrayString[] = userInput.split("(?!^)");
+            	
+            	int[] array = Arrays.stream(arrayString).mapToInt(Integer::parseInt).toArray();
+            	  for (int i = 0; i < array.length / 2; i++) {
+            	        Object temp = array[i];
+            	        array[i] = array[array.length - 1 - i];
+            	        array[array.length - 1 - i] = (int) temp;
+            	    }
+            	int b[] = generateCode(array);
+            	String arrConv = "";
+            	for (int k=0; k<b.length;k++) {
+            		arrConv += b[k];
+            	}
+            	int error = getRandomNumberInRange(1, n);
+            	
+            	b[error-1] = (b[error-1]+1)%2;
+            	
+            	String errorArr = "";
+            	for (int k=0; k<b.length;k++) {
+            		
+            		errorArr += b[k];
+            		
+            	}
+            	String showProgress = "Generated Hamming Code: "+ arrConv +"\nRandom error at Bit Position "+(b.length-error)+" was made \nTherefore the Sent Code: "+errorArr;
+            	JOptionPane.showMessageDialog(frame, showProgress);
+         
+            	out.println(Arrays.toString(b)+"\t"+b.length+"\t"+a.length);
+            	
+                String response = null;
+                try {
+
+                	response = ReadBigStringIn(in);
+                   
+                    if (response == null || response.equals("")) {
+                          System.exit(0);
+                    }
+                    
+                } catch (IOException ex) {
+                     response = "Error: " + ex;
+                }
+                messageArea.append(response + "\n");
+                dataField.selectAll();
+            }
+        };
+        sendInfo.addActionListener(listener);
+    	dataField.addActionListener(listener);
+    }
+  
+    private static int getRandomNumberInRange(int min, int max) {
+
+		if (min >= max) {
+			throw new IllegalArgumentException("max must be greater than min");
+		}
+		Random r = new Random();
+		return r.nextInt((max - min) + 1) + min;
+	}
+    
+    public String ReadBigStringIn(BufferedReader buffIn) throws IOException {
+        StringBuilder everything = new StringBuilder();
+        String line;
+        for(int j=0;j<=3;j++) {
+        	line = buffIn.readLine();
+        	everything.append(line+"\n");
+        }
+        return everything.toString();
+    }
+    
+    public void connectToServer() throws IOException {
+        String serverAddress = JOptionPane.showInputDialog(
+            frame,
+            "Enter IP Address of the Server:",
+            "Welcome to the Hamming Code Simulator",
+            JOptionPane.QUESTION_MESSAGE);
+        Socket socket = new Socket(serverAddress, 9898);
+        in = new BufferedReader(
+                new InputStreamReader(socket.getInputStream()));
+        out = new PrintWriter(socket.getOutputStream(), true);
+        
+		 ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
+        for (int i = 0; i < 3; i++) {
+            messageArea.append(in.readLine() + "\n");
+        }
+    }
+    public static void main(String[] args) throws Exception {
+        Client client = new Client();
+        client.frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        client.frame.setBounds(100, 100, 640, 380);
+        client.frame.setVisible(true);
+        client.connectToServer();
+    }
+    
+    static int[] generateCode(int a[]) {
+		int b[];
+		int i=0, parity_count=0 ,j=0, k=0;
+		while(i<a.length) {
+			if(Math.pow(2,parity_count) == i+parity_count + 1) {
+				parity_count++;
+			}
+			else {
+				i++;
+			}
+		}
+		b = new int[a.length + parity_count];
+		for(i=1 ; i<=b.length ; i++) {
+			if(Math.pow(2, j) == i) {
+				b[i-1] = 2;
+				j++;
+			}
+			else {
+				b[k+j] = a[k++];
+			}
+		}
+		for(i=0 ; i<parity_count ; i++) {
+			b[((int) Math.pow(2, i))-1] = getParity(b, i);
+		}
+		return b;
+	}
+	
+	static int getParity(int b[], int power) {
+		int parity = 0;
+		for(int i=0 ; i < b.length ; i++) {
+			if(b[i] != 2) {
+				int k = i+1;
+				String s = Integer.toBinaryString(k);
+				int x = ((Integer.parseInt(s))/((int) Math.pow(10, power)))%10;
+				if(x == 1) {
+					if(b[i] == 1) {
+						parity = (parity+1)%2;
+					}
+				}
+			}
+		}
+		return parity;
+	}
+}
